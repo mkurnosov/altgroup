@@ -236,6 +236,41 @@ uint8_t *cayley_graph_adjmatrix(struct altgroup *ag, struct altgroup *s)
     return m;
 }
 
+/*
+ * cayley_graph_adjmatrix_gmp: Returns adjacency matrix for a Cayley graph based on
+ *                             alternating group ag and generating set s.
+ *                             Elements are GNU MP rational numbers.
+ */
+mpq_t *cayley_graph_adjmatrix_gmp(struct altgroup *ag, struct altgroup *s)
+{
+    int n = ag->degree;
+    int nperms = ag->nperms;
+    int *prod = malloc(sizeof(*prod) * n);
+    mpq_t *m = malloc(sizeof(*m) * nperms * nperms);
+    memset(m, 0, nperms * nperms);
+    int k = 0;
+    for (int i = 0; i < nperms; i++) {
+        for (int j = 0; j < nperms; j++)
+            mpq_init(m[k++]);
+    }
+
+    /* loop for each element of ag group */
+    for (int i = 0; i < nperms; i++) {
+        int *u = &ag->perms[i * (n + 1)];
+        int ui = u[0];
+        /* loop for each element of generating set s */
+        for (int j = 0; j < s->nperms; j++) {
+            int *v = &s->perms[j * (n + 1)];
+            perm_prod(prod, &u[1], &v[1], n);
+            int vi = perm_index(ag, prod);
+            mpq_set_ui(m[ui * nperms + vi], 1, 1);
+            mpq_set_ui(m[vi * nperms + ui], 1, 1);
+        }
+    }
+    free(prod);
+    return m;
+}
+
 /* print_adjmatrix_gap: Prints adjacency matrix in GAP format */
 void print_adjmatrix_gap(uint8_t *m, int n)
 {
@@ -276,6 +311,56 @@ char *perm_str(struct altgroup *ag, int index, char *buf)
     return buf;
 }
 
+/*
+ * cayley_graph_adjmatrix_rank: Returns rank of the adjacency matrix of the graph.
+ *                              Algorithm based on GAP RankMat function
+ *                              (see gap/lib/matrix.gi)
+ */
+int cayley_graph_adjmatrix_rank(mpq_t *m, int n)
+{
+    int i, j, k;
+    int *nzheads = malloc(sizeof(*nzheads) * n);
+    int *bvecs = malloc(sizeof(*bvecs) * n);
+    int nz = 0;
+    mpq_t zero, t, x, negx, a, inv;
+    mpq_inits(zero, t, x, negx, a, inv, NULL);
+    for (i = 0; i < n; i++) {
+        /* Reduce the row with known basis vectors */
+        for (j = 0; j < nz; j++) {
+            mpq_set(x, m[i * n + nzheads[j]]);
+            if (!mpq_equal(x, zero)) {
+                mpq_set_si(negx, -1, 1);
+                mpq_mul(negx, negx, x);
+                for (k = 0; k < n; k++) {
+                    int ind = bvecs[j] * n + k;
+                    mpq_mul(t, m[ind], negx);
+                    mpq_add(m[i * n + k], m[i * n + k], t);
+                }
+            }
+        }
+        /* Search smallest non-negative integer */
+        for (j = 0; j < n; j++) {
+            if (!mpq_equal(m[i * n + j], zero))
+                break;
+        }
+        if (j < n) {
+            /* We found a new basis vector */
+            mpq_inv(inv, m[i * n + j]);
+            for (k = 0; k < n; k++) {
+                int ind = i * n + k;
+                mpq_mul(m[ind], m[ind], inv);
+            }
+            /* Add row[i] to list of vectors */
+            bvecs[nz] = i;
+            nzheads[nz] = j;
+            nz++;
+        }
+    }
+    free(nzheads);
+    free(bvecs);
+    return nz;
+}
+
 void print_usage()
 {
     printf("Usage: altgroup [-n <degree>] [-t <gen-type>] <command>\n");
@@ -287,6 +372,7 @@ void print_usage()
     printf("    gen-set-gap\n");
     printf("    cayley-graph-adjmatrix-gap\n");
     printf("    cayley-graph-dot\n");
+    printf("    cayley-graph-adjmatrix-rank\n");
 }
 
 int main(int argc, char **argv)
@@ -322,6 +408,7 @@ int main(int argc, char **argv)
         printf("    gen-set-gap\n");
         printf("    cayley-graph-adjmatrix-gap\n");
         printf("    cayley-graph-dot\n");
+        printf("    cayley-graph-adjmatrix-rank\n");
     } else if (strcmp(argv[optind], "altgroup") == 0) {
         altgroup_create(&ag, group_degree);
         altgroup_print(&ag);
@@ -363,6 +450,15 @@ int main(int argc, char **argv)
             printf("};\n");
         }
         printf("}\n");
+        free(m);
+        altgroup_free(&s);
+        altgroup_free(&s);
+    } else if (strcmp(argv[optind], "cayley-graph-adjmatrix-rank") == 0) {
+        altgroup_create(&ag, group_degree);
+        altgroup_generate(&s, group_degree, generator_type);
+        mpq_t *m = cayley_graph_adjmatrix_gmp(&ag, &s);
+        int rank = cayley_graph_adjmatrix_rank(m, ag.nperms);
+        printf("Rank of adjacency matrix: %d\n", rank);
         free(m);
         altgroup_free(&s);
         altgroup_free(&s);
