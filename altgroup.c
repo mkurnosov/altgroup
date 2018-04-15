@@ -433,7 +433,6 @@ int main(int argc, char **argv)
         print_adjmatrix_gap(m, ag.nperms);
         free(m);
         altgroup_free(&s);
-        altgroup_free(&s);
     } else if (strcmp(argv[optind], "cayley-graph-dot") == 0) {
         altgroup_create(&ag, group_degree);
         altgroup_generate(&s, group_degree, generator_type);
@@ -452,7 +451,6 @@ int main(int argc, char **argv)
         printf("}\n");
         free(m);
         altgroup_free(&s);
-        altgroup_free(&s);
     } else if (strcmp(argv[optind], "cayley-graph-adjmatrix-rank") == 0) {
         altgroup_create(&ag, group_degree);
         altgroup_generate(&s, group_degree, generator_type);
@@ -460,7 +458,6 @@ int main(int argc, char **argv)
         int rank = cayley_graph_adjmatrix_rank(m, ag.nperms);
         printf("Rank of adjacency matrix: %d\n", rank);
         free(m);
-        altgroup_free(&s);
         altgroup_free(&s);
     } else {
         fprintf(stderr, "Error: unknown command '%s'\n", argv[optind]);
